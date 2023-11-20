@@ -1,35 +1,56 @@
 import socket
 import threading
-
-def send_message(client_socket):
-     name = input("what's your name ?")
-     while True:
-        msg = input(f"{name}> ")
-        client_socket.send(f"{name}>{msg}".encode("UTF-8"))
+import json
+import sys
 
 def receive_messages(client_socket):
     while True:
-        data_received = client_socket.recv(128).decode("UTF-8")
-        if not data_received:
-            print("Server disconnected")
+        try:
+            message = client_socket.recv(1024).decode('utf-8')
+            print(message)
+        except Exception as e:
+            print(f"Error: {e}")
             break
-        print(f"Received from server: {data_received}")
 
-def start_client():
+def send_client():
+    host = '127.0.0.1'  
+    port = 9007
+
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    host, port = '127.0.0.1', 9002
     client.connect((host, port))
 
-    send_thread = threading.Thread(target=send_message, args=(client,))
-    receive_thread = threading.Thread(target=receive_messages, args=(client,))
+    username = input("Enter your username: ")
+    client.send(username.encode('utf-8'))
 
-    send_thread.start()
+    welcome_message = client.recv(1024).decode('utf-8')
+    print(welcome_message)
+
+    receive_thread = threading.Thread(target=receive_messages, args=(client,))
     receive_thread.start()
 
-    send_thread.join()
-    receive_thread.join()
+    try:
+        while True:
+            message = input(f" ")
+            if message.lower() == 'exit':
+                # Envoyer un message spécial pour indiquer la déconnexion
+                client.send(json.dumps({'content': 'exit'}).encode('utf-8'))
+                break
 
-if __name__ == '__main__':
-    num_clients = 2  # Change this to the number of clients you want
-    for _ in range(num_clients):
-        threading.Thread(target=start_client).start()
+            # Créer un message JSON avec le contenu et l'expéditeur
+            message_data = {
+                'content': message,
+                'sender': username
+            }
+
+            # Convertir le message en format JSON
+            message_json = json.dumps(message_data)
+
+            # Envoyer le message JSON au serveur
+            client.send(message_json.encode('utf-8'))
+    except KeyboardInterrupt:
+        # Si l'utilisateur interrompt avec Ctrl+C, fermez proprement la connexion
+        client.send(json.dumps({'content': 'exit'}).encode('utf-8'))
+        sys.exit()
+
+if __name__ == "__main__":
+    send_client()
